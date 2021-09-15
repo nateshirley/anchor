@@ -3,10 +3,19 @@ use anchor_lang::solana_program::system_program;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
+//so the basic setup here is that each of the pub functions are instruction handlers that you can call. like how 
+//on the explorer it shows 4 instructions whatever
+
+//each of the instructions have a context which must define all the accounts you are going to be using inside that instruction. 
+//this is what allows the runtime to parallelize the instruction handling
+
+
 #[program]
 pub mod puppet {
     use super::*;
     pub fn initialize(ctx: Context<Initialize>) -> ProgramResult {
+        //i think what's happening here is that you have to pass it in to a function to initialize it 
+        //so we're initializing the puppet account here, and then calling it from the other instruction
         Ok(())
     }
 

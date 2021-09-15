@@ -54,6 +54,9 @@ mod id;
 /// [`Pod`](../bytemuck/trait.Pod.html). Please review the
 /// [`safety`](file:///home/armaniferrante/Documents/code/src/github.com/project-serum/anchor/target/doc/bytemuck/trait.Pod.html#safety)
 /// section before using.
+/// just kidding it's not
+/// this is the base account attribute declared like #[attribute]. this is an attribute that's known as a procedural macro
+/// it adds syntax 
 #[proc_macro_attribute]
 pub fn account(
     args: proc_macro::TokenStream,
@@ -77,7 +80,6 @@ pub fn account(
             namespace = ns;
         }
     }
-
     let account_strct = parse_macro_input!(input as syn::ItemStruct);
     let account_name = &account_strct.ident;
     let (impl_gen, type_gen, where_clause) = account_strct.generics.split_for_impl();
@@ -99,7 +101,7 @@ pub fn account(
         );
         format!("{:?}", discriminator).parse().unwrap()
     };
-
+//here is where it's implementing the Owner trait
     let owner_impl = {
         if namespace.is_empty() {
             quote! {

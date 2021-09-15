@@ -23,7 +23,9 @@ describe("basic-3", () => {
       signers: [newPuppetAccount],
     });
 
+    //it's already initialized. so here we just throw it into the new instruction. got it
     // Invoke the puppet master to perform a CPI to the puppet.
+    //they're just connected with the public key. so we don't have to pass anything or anyth
     await puppetMaster.rpc.pullStrings(new anchor.BN(111), {
        accounts: {
           puppet: newPuppetAccount.publicKey,

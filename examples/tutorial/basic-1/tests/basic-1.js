@@ -31,7 +31,10 @@ describe("basic-1", () => {
 
     // Fetch the newly created account from the cluster.
     const account = await program.account.myAccount.fetch(myAccount.publicKey);
-
+    console.log(account)
+    console.log(parseInt(account.data, 16))
+    const num = 1234;
+    console.log(num.toString(16))
     // Check it's state was initialized.
     assert.ok(account.data.eq(new anchor.BN(1234)));
 
@@ -48,6 +51,11 @@ describe("basic-1", () => {
     const program = anchor.workspace.Basic1;
 
     // Invoke the update rpc.
+    // await program.rpc.update(new anchor.BN(4321), {
+    //   accounts: {
+    //     myAccount: myAccount.publicKey,
+    //   },
+    // });
     await program.rpc.update(new anchor.BN(4321), {
       accounts: {
         myAccount: myAccount.publicKey,

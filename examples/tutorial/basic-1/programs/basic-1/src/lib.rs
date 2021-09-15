@@ -6,15 +6,21 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 mod basic_1 {
     use super::*;
 
+    //testing doesn't run print statements i don't think
+
+
     pub fn initialize(ctx: Context<Initialize>, data: u64) -> ProgramResult {
-        let my_account = &mut ctx.accounts.my_account;
-        my_account.data = data;
+        // let my_account = &mut ctx.accounts.my_account;
+        // my_account.data = data;
+        ctx.accounts.my_account.data = data;
         Ok(())
     }
 
     pub fn update(ctx: Context<Update>, data: u64) -> ProgramResult {
-        let my_account = &mut ctx.accounts.my_account;
-        my_account.data = data;
+        // let my_account = &mut ctx.accounts.my_account;
+        // my_account.data = data;
+        // not sure the difference here. i don't believe there is one
+        ctx.accounts.my_account.data = data;
         Ok(())
     }
 }

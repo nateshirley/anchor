@@ -23,6 +23,7 @@ describe('basic-2', () => {
       },
       signers: [counter],
     })
+    
 
     let counterAccount = await program.account.counter.fetch(counter.publicKey)
 
