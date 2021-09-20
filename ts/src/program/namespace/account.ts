@@ -28,7 +28,7 @@ export default class AccountFactory {
   ): AccountNamespace {
     const accountFns: AccountNamespace = {};
 
-    idl.accounts.forEach((idlAccount) => {
+    idl.accounts?.forEach((idlAccount) => {
       const name = camelCase(idlAccount.name);
       accountFns[name] = new AccountClient(
         idl,
@@ -67,7 +67,7 @@ export interface AccountNamespace {
   [key: string]: AccountClient;
 }
 
-export class AccountClient {
+export class AccountClient<T = any> {
   /**
    * Returns the number of bytes in this account.
    */
@@ -113,20 +113,21 @@ export class AccountClient {
     this._programId = programId;
     this._provider = provider ?? getProvider();
     this._coder = coder ?? new Coder(idl);
-    this._size = ACCOUNT_DISCRIMINATOR_SIZE + accountSize(idl, idlAccount);
+    this._size =
+      ACCOUNT_DISCRIMINATOR_SIZE + (accountSize(idl, idlAccount) ?? 0);
   }
 
   /**
-   * Returns a deserialized account.
+   * Returns a deserialized account, returning null if it doesn't exist.
    *
    * @param address The address of the account to fetch.
    */
-  async fetch(address: Address): Promise<Object> {
+  async fetchNullable(address: Address): Promise<T | null> {
     const accountInfo = await this._provider.connection.getAccountInfo(
       translateAddress(address)
     );
     if (accountInfo === null) {
-      throw new Error(`Account does not exist ${address.toString()}`);
+      return null;
     }
 
     // Assert the account discriminator is correct.
@@ -139,9 +140,22 @@ export class AccountClient {
   }
 
   /**
+   * Returns a deserialized account.
+   *
+   * @param address The address of the account to fetch.
+   */
+  async fetch(address: Address): Promise<T> {
+    const data = await this.fetchNullable(address);
+    if (data === null) {
+      throw new Error(`Account does not exist ${address.toString()}`);
+    }
+    return data;
+  }
+
+  /**
    * Returns all instances of this account type for the program.
    */
-  async all(filter?: Buffer): Promise<ProgramAccount<any>[]> {
+  async all(filter?: Buffer): Promise<ProgramAccount<T>[]> {
     let bytes = await accountDiscriminator(this._idlAccount.name);
     if (filter !== undefined) {
       bytes = Buffer.concat([bytes, filter]);
@@ -177,8 +191,9 @@ export class AccountClient {
    * changes.
    */
   subscribe(address: Address, commitment?: Commitment): EventEmitter {
-    if (subscriptions.get(address.toString())) {
-      return subscriptions.get(address.toString()).ee;
+    const sub = subscriptions.get(address.toString());
+    if (sub) {
+      return sub.ee;
     }
 
     const ee = new EventEmitter();
@@ -248,7 +263,7 @@ export class AccountClient {
    * Function returning the associated account. Args are keys to associate.
    * Order matters.
    */
-  async associated(...args: Array<PublicKey | Buffer>): Promise<any> {
+  async associated(...args: Array<PublicKey | Buffer>): Promise<T> {
     const addr = await this.associatedAddress(...args);
     return await this.fetch(addr);
   }
