@@ -14,6 +14,7 @@
 //! OR
 //! 2. If no one has exchanged, the initializer can close the escrow account
 //! - Initializer will get back ownership of their token X account
+//! so this part for number 2 has all of the information i need to do what i am trying to do
 
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, SetAuthority, TokenAccount, Transfer};
@@ -24,7 +25,10 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 #[program]
 pub mod escrow {
     use super::*;
-
+//i think this is just chaining the set of the reference with the to_account_info() call
+//i'm not sure why it just calls key at the end tho
+//wait i got it, it's setting the initializer deposit account to the value of the context key. got it
+//so it has to serialize it i guess to store it? idk fully about the serializations 
     pub fn initialize_escrow(
         ctx: Context<InitializeEscrow>,
         initializer_amount: u64,
@@ -33,8 +37,7 @@ pub mod escrow {
         ctx.accounts.escrow_account.initializer_key = *ctx.accounts.initializer.key;
         ctx.accounts
             .escrow_account
-            .initializer_deposit_token_account = *ctx
-            .accounts
+            .initializer_deposit_token_account = *ctx.accounts
             .initializer_deposit_token_account
             .to_account_info()
             .key;
@@ -54,6 +57,11 @@ pub mod escrow {
     }
 
     pub fn cancel_escrow(ctx: Context<CancelEscrow>) -> ProgramResult {
+        //here i believe he is finding teh account that initialized??? not sure
+        //i think he's using the seed as the string escrow, so that way he always gets the same one back??
+        //because he's only doing one for this program id, it will always be the same. i think??
+        //[..] is going from string literal to &str
+        //this is def creating a utf-8 byte array
         let (_pda, bump_seed) = Pubkey::find_program_address(&[b"escrow"], ctx.program_id);
         let seeds = &[&b"escrow"[..], &[bump_seed]];
 
@@ -140,6 +148,11 @@ pub struct Exchange<'info> {
     pub token_program: AccountInfo<'info>,
 }
 
+
+//so he is giving the escrow account a value called initializer, this is the address of the person that initialized it
+//and then in order to cancel the account, he is requiring that the escrow's initializer is the same as the instruction's initializer
+//got it
+//but how does he find the account?
 #[derive(Accounts)]
 pub struct CancelEscrow<'info> {
     pub initializer: AccountInfo<'info>,
