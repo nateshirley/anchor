@@ -21,6 +21,12 @@ pub mod cashiers_check {
         nonce: u8,
     ) -> Result<()> {
         // Transfer funds to the check.
+        // so this is a struct that represents the set of accounts required for a transfer
+        // these accounts are then fed into a CPI context which is used to actually invoke the transfer
+        //so we are moving tokens from the "from" account, to the vault, and apparently the owner has authority over the from
+        //enforced by the has_one constraint
+        //this is a basic transfer for a token account, not a base sol account
+        //so it's doing the transfer with the spl tokens inside the account, not lamports. i believe
         let cpi_accounts = Transfer {
             from: ctx.accounts.from.to_account_info().clone(),
             to: ctx.accounts.vault.to_account_info().clone(),
@@ -42,6 +48,32 @@ pub mod cashiers_check {
         Ok(())
     }
 
+    /*
+    https://docs.rs/anchor-spl/0.16.1/src/anchor_spl/token.rs.html#13-35
+
+
+    this is where you can see that it's calling the spl_token::transfer instruction
+    
+    so i'm guessing the reason why there's no anchor implementation for the transfer is because it's simple enough
+    that u wouldn't want to use it??
+
+
+    now with this 
+    https://github.com/solana-labs/solana-program-library/blob/master/examples/rust/transfer-lamports/src/processor.rs
+
+    im wondering if the try_borrow is in anchor?
+
+    im confused about the difference between a PDA and an account that's owned by a program???
+    what is the difference
+
+
+    an account is owned by the system program by default. the system program has basic functions for creating more accounts 
+    and sending lamports and such and such. acocunts can be assigned a new owner once and only once. this owner is 
+    always a program, which has permission to deduct lamports from the account and modify its data however it wishes
+
+
+    */
+
     #[access_control(not_burned(&ctx.accounts.check))]
     pub fn cash_check(ctx: Context<CashCheck>) -> Result<()> {
         let seeds = &[
@@ -49,6 +81,9 @@ pub mod cashiers_check {
             &[ctx.accounts.check.nonce],
         ];
         let signer = &[&seeds[..]];
+        //this one is a bit more straightforward. 
+        //we are doing a transfer from the vault, to the "to" account passed in
+        //the check_signer has authority over the vault
         let cpi_accounts = Transfer {
             from: ctx.accounts.vault.to_account_info().clone(),
             to: ctx.accounts.to.to_account_info().clone(),
@@ -87,7 +122,7 @@ pub struct CreateCheck<'info> {
     // Check being created.
     #[account(zero)]
     check: Account<'info, Check>,
-    // Check's token vault.
+    // Check's token vault. it must be owned by the check_signer
     #[account(mut, constraint = &vault.owner == check_signer.key)]
     vault: Account<'info, TokenAccount>,
     // Program derived address for the check.

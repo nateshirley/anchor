@@ -48,6 +48,9 @@ describe("escrow", () => {
       TOKEN_PROGRAM_ID
     );
 
+    //this actually creates the account and initializes it in the same transaction.
+    //and this pattern (create, init) is the same as the pattern from the guy's medium post. 
+   // https://github.com/solana-labs/solana-program-library/blob/master/token/js/client/token.js#L446
     initializerTokenAccountA = await mintA.createAccount(provider.wallet.publicKey);
     takerTokenAccountA = await mintA.createAccount(provider.wallet.publicKey);
 
@@ -67,7 +70,8 @@ describe("escrow", () => {
       [mintAuthority],
       takerAmount
     );
-
+    
+    //account owner is not set here. it's set in the program with setAuthority. right now the owner is the wallet
     let _initializerTokenAccountA = await mintA.getAccountInfo(initializerTokenAccountA);
     let _takerTokenAccountB = await mintB.getAccountInfo(takerTokenAccountB);
 
