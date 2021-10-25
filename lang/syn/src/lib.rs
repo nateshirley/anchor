@@ -278,6 +278,9 @@ impl Field {
             Ty::Account(_) => quote! {
                 anchor_lang::Account
             },
+            Ty::AccountLoader(_) => quote! {
+                anchor_lang::AccountLoader
+            },
             Ty::Loader(_) => quote! {
                 anchor_lang::Loader
             },
@@ -313,6 +316,12 @@ impl Field {
                 }
             }
             Ty::Account(ty) => {
+                let ident = &ty.account_type_path;
+                quote! {
+                    #ident
+                }
+            }
+            Ty::AccountLoader(ty) => {
                 let ident = &ty.account_type_path;
                 quote! {
                     #ident
@@ -382,6 +391,7 @@ pub enum Ty {
     CpiState(CpiStateTy),
     ProgramAccount(ProgramAccountTy),
     Loader(LoaderTy),
+    AccountLoader(LoaderAccountTy),
     CpiAccount(CpiAccountTy),
     Sysvar(SysvarTy),
     Account(AccountTy),
@@ -421,6 +431,12 @@ pub struct ProgramAccountTy {
 
 #[derive(Debug, PartialEq)]
 pub struct CpiAccountTy {
+    // The struct type of the account.
+    pub account_type_path: TypePath,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct LoaderAccountTy {
     // The struct type of the account.
     pub account_type_path: TypePath,
 }
@@ -497,6 +513,7 @@ pub struct ConstraintGroup {
     raw: Vec<ConstraintRaw>,
     close: Option<ConstraintClose>,
     address: Option<ConstraintAddress>,
+    associated_token: Option<ConstraintAssociatedToken>,
 }
 
 impl ConstraintGroup {
@@ -533,6 +550,7 @@ pub enum Constraint {
     Owner(ConstraintOwner),
     RentExempt(ConstraintRentExempt),
     Seeds(ConstraintSeedsGroup),
+    AssociatedToken(ConstraintAssociatedToken),
     Executable(ConstraintExecutable),
     State(ConstraintState),
     Close(ConstraintClose),
@@ -564,6 +582,7 @@ pub enum ConstraintToken {
     AssociatedTokenMint(Context<ConstraintTokenMint>),
     AssociatedTokenAuthority(Context<ConstraintTokenAuthority>),
     MintAuthority(Context<ConstraintMintAuthority>),
+    MintFreezeAuthority(Context<ConstraintMintFreezeAuthority>),
     MintDecimals(Context<ConstraintMintDecimals>),
     Bump(Context<ConstraintTokenBump>),
 }
@@ -575,20 +594,30 @@ impl Parse for ConstraintToken {
 }
 
 #[derive(Debug, Clone)]
-pub struct ConstraintInit {}
+pub struct ConstraintInit {
+    pub if_needed: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConstraintInitIfNeeded {}
 
 #[derive(Debug, Clone)]
 pub struct ConstraintZeroed {}
 
 #[derive(Debug, Clone)]
-pub struct ConstraintMut {}
+pub struct ConstraintMut {
+    pub error: Option<Expr>,
+}
 
 #[derive(Debug, Clone)]
-pub struct ConstraintSigner {}
+pub struct ConstraintSigner {
+    pub error: Option<Expr>,
+}
 
 #[derive(Debug, Clone)]
 pub struct ConstraintHasOne {
     pub join_target: Expr,
+    pub error: Option<Expr>,
 }
 
 #[derive(Debug, Clone)]
@@ -599,16 +628,19 @@ pub struct ConstraintLiteral {
 #[derive(Debug, Clone)]
 pub struct ConstraintRaw {
     pub raw: Expr,
+    pub error: Option<Expr>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ConstraintOwner {
     pub owner_address: Expr,
+    pub error: Option<Expr>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ConstraintAddress {
     pub address: Expr,
+    pub error: Option<Expr>,
 }
 
 #[derive(Debug, Clone)]
@@ -619,6 +651,7 @@ pub enum ConstraintRentExempt {
 
 #[derive(Debug, Clone)]
 pub struct ConstraintInitGroup {
+    pub if_needed: bool,
     pub seeds: Option<ConstraintSeedsGroup>,
     pub payer: Option<Expr>,
     pub space: Option<Expr>,
@@ -658,12 +691,24 @@ pub struct ConstraintSpace {
 #[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum InitKind {
-    Program { owner: Option<Expr> },
+    Program {
+        owner: Option<Expr>,
+    },
     // Owner for token and mint represents the authority. Not to be confused
     // with the owner of the AccountInfo.
-    Token { owner: Expr, mint: Expr },
-    AssociatedToken { owner: Expr, mint: Expr },
-    Mint { owner: Expr, decimals: Expr },
+    Token {
+        owner: Expr,
+        mint: Expr,
+    },
+    AssociatedToken {
+        owner: Expr,
+        mint: Expr,
+    },
+    Mint {
+        owner: Expr,
+        freeze_authority: Option<Expr>,
+        decimals: Expr,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -687,6 +732,11 @@ pub struct ConstraintMintAuthority {
 }
 
 #[derive(Debug, Clone)]
+pub struct ConstraintMintFreezeAuthority {
+    mint_freeze_auth: Expr,
+}
+
+#[derive(Debug, Clone)]
 pub struct ConstraintMintDecimals {
     decimals: Expr,
 }
@@ -694,6 +744,12 @@ pub struct ConstraintMintDecimals {
 #[derive(Debug, Clone)]
 pub struct ConstraintTokenBump {
     bump: Option<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConstraintAssociatedToken {
+    pub wallet: Expr,
+    pub mint: Expr,
 }
 
 // Syntaxt context object for preserving metadata about the inner item.

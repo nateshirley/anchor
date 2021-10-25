@@ -60,10 +60,27 @@ pub fn parse_token(stream: ParseStream) -> ParseResult<ConstraintToken> {
     let kw = ident.to_string();
 
     let c = match kw.as_str() {
-        "init" => ConstraintToken::Init(Context::new(ident.span(), ConstraintInit {})),
+        "init" => ConstraintToken::Init(Context::new(
+            ident.span(),
+            ConstraintInit { if_needed: false },
+        )),
+        "init_if_needed" => ConstraintToken::Init(Context::new(
+            ident.span(),
+            ConstraintInit { if_needed: true },
+        )),
         "zero" => ConstraintToken::Zeroed(Context::new(ident.span(), ConstraintZeroed {})),
-        "mut" => ConstraintToken::Mut(Context::new(ident.span(), ConstraintMut {})),
-        "signer" => ConstraintToken::Signer(Context::new(ident.span(), ConstraintSigner {})),
+        "mut" => ConstraintToken::Mut(Context::new(
+            ident.span(),
+            ConstraintMut {
+                error: parse_optional_custom_error(&stream)?,
+            },
+        )),
+        "signer" => ConstraintToken::Signer(Context::new(
+            ident.span(),
+            ConstraintSigner {
+                error: parse_optional_custom_error(&stream)?,
+            },
+        )),
         "executable" => {
             ConstraintToken::Executable(Context::new(ident.span(), ConstraintExecutable {}))
         }
@@ -83,6 +100,12 @@ pub fn parse_token(stream: ParseStream) -> ParseResult<ConstraintToken> {
                     span,
                     ConstraintMintAuthority {
                         mint_auth: stream.parse()?,
+                    },
+                )),
+                "freeze_authority" => ConstraintToken::MintFreezeAuthority(Context::new(
+                    span,
+                    ConstraintMintFreezeAuthority {
+                        mint_freeze_auth: stream.parse()?,
                     },
                 )),
                 "decimals" => ConstraintToken::MintDecimals(Context::new(
@@ -166,23 +189,18 @@ pub fn parse_token(stream: ParseStream) -> ParseResult<ConstraintToken> {
                 .join(stream.span())
                 .unwrap_or_else(|| ident.span());
             match kw.as_str() {
-                // Deprecated since 0.11
-                "belongs_to" => {
-                    return Err(ParseError::new(
-                        ident.span(),
-                        "belongs_to is deprecated, please use has_one",
-                    ))
-                }
                 "has_one" => ConstraintToken::HasOne(Context::new(
                     span,
                     ConstraintHasOne {
                         join_target: stream.parse()?,
+                        error: parse_optional_custom_error(&stream)?,
                     },
                 )),
                 "owner" => ConstraintToken::Owner(Context::new(
                     span,
                     ConstraintOwner {
                         owner_address: stream.parse()?,
+                        error: parse_optional_custom_error(&stream)?,
                     },
                 )),
                 "rent_exempt" => ConstraintToken::RentExempt(Context::new(
@@ -230,6 +248,7 @@ pub fn parse_token(stream: ParseStream) -> ParseResult<ConstraintToken> {
                     span,
                     ConstraintRaw {
                         raw: stream.parse()?,
+                        error: parse_optional_custom_error(&stream)?,
                     },
                 )),
                 "close" => ConstraintToken::Close(Context::new(
@@ -242,6 +261,7 @@ pub fn parse_token(stream: ParseStream) -> ParseResult<ConstraintToken> {
                     span,
                     ConstraintAddress {
                         address: stream.parse()?,
+                        error: parse_optional_custom_error(&stream)?,
                     },
                 )),
                 _ => return Err(ParseError::new(ident.span(), "Invalid attribute")),
@@ -250,6 +270,15 @@ pub fn parse_token(stream: ParseStream) -> ParseResult<ConstraintToken> {
     };
 
     Ok(c)
+}
+
+fn parse_optional_custom_error(stream: &ParseStream) -> ParseResult<Option<Expr>> {
+    if stream.peek(Token![@]) {
+        stream.parse::<Token![@]>()?;
+        stream.parse().map(Some)
+    } else {
+        Ok(None)
+    }
 }
 
 #[derive(Default)]
@@ -276,6 +305,7 @@ pub struct ConstraintGroupBuilder<'ty> {
     pub associated_token_mint: Option<Context<ConstraintTokenMint>>,
     pub associated_token_authority: Option<Context<ConstraintTokenAuthority>>,
     pub mint_authority: Option<Context<ConstraintMintAuthority>>,
+    pub mint_freeze_authority: Option<Context<ConstraintMintFreezeAuthority>>,
     pub mint_decimals: Option<Context<ConstraintMintDecimals>>,
     pub bump: Option<Context<ConstraintTokenBump>>,
 }
@@ -305,6 +335,7 @@ impl<'ty> ConstraintGroupBuilder<'ty> {
             associated_token_mint: None,
             associated_token_authority: None,
             mint_authority: None,
+            mint_freeze_authority: None,
             mint_decimals: None,
             bump: None,
         }
@@ -322,7 +353,7 @@ impl<'ty> ConstraintGroupBuilder<'ty> {
                 }
                 None => self
                     .mutable
-                    .replace(Context::new(i.span(), ConstraintMut {})),
+                    .replace(Context::new(i.span(), ConstraintMut { error: None })),
             };
             // Rent exempt if not explicitly skipped.
             if self.rent_exempt.is_none() {
@@ -341,7 +372,7 @@ impl<'ty> ConstraintGroupBuilder<'ty> {
             if self.signer.is_none() && self.seeds.is_none() && self.associated_token_mint.is_none()
             {
                 self.signer
-                    .replace(Context::new(i.span(), ConstraintSigner {}));
+                    .replace(Context::new(i.span(), ConstraintSigner { error: None }));
             }
         }
 
@@ -356,7 +387,7 @@ impl<'ty> ConstraintGroupBuilder<'ty> {
                 }
                 None => self
                     .mutable
-                    .replace(Context::new(z.span(), ConstraintMut {})),
+                    .replace(Context::new(z.span(), ConstraintMut { error: None })),
             };
             // Rent exempt if not explicitly skipped.
             if self.rent_exempt.is_none() {
@@ -460,6 +491,7 @@ impl<'ty> ConstraintGroupBuilder<'ty> {
             associated_token_mint,
             associated_token_authority,
             mint_authority,
+            mint_freeze_authority,
             mint_decimals,
             bump,
         } = self;
@@ -480,15 +512,34 @@ impl<'ty> ConstraintGroupBuilder<'ty> {
             };
         }
 
+        let is_init = init.is_some();
         let seeds = seeds.map(|c| ConstraintSeedsGroup {
-            is_init: init.is_some(),
+            is_init,
             seeds: c.seeds.clone(),
             bump: into_inner!(bump)
                 .map(|b| b.bump)
                 .expect("bump must be provided with seeds"),
         });
+        let associated_token = match (associated_token_mint, associated_token_authority) {
+            (Some(mint), Some(auth)) => Some(ConstraintAssociatedToken {
+                wallet: auth.into_inner().auth,
+                mint: mint.into_inner().mint,
+            }),
+            (Some(mint), None) => return Err(ParseError::new(
+                mint.span(),
+                "authority must be provided to specify an associated token program derived address",
+            )),
+            (None, Some(auth)) => {
+                return Err(ParseError::new(
+                    auth.span(),
+                    "mint must be provided to specify an associated token program derived address",
+                ))
+            }
+            _ => None,
+        };
         Ok(ConstraintGroup {
-            init: init.as_ref().map(|_| Ok(ConstraintInitGroup {
+            init: init.as_ref().map(|i| Ok(ConstraintInitGroup {
+            if_needed: i.if_needed,
                 seeds: seeds.clone(),
                 payer: into_inner!(payer.clone()).map(|a| a.target),
                 space: space.clone().map(|s| s.space.clone()),
@@ -503,16 +554,10 @@ impl<'ty> ConstraintGroupBuilder<'ty> {
                             )),
                         },
                     }
-                } else if let Some(tm) = &associated_token_mint {
+                } else if let Some(at) = &associated_token {
                     InitKind::AssociatedToken {
-                        mint: tm.clone().into_inner().mint,
-                        owner: match &associated_token_authority {
-                            Some(a) => a.clone().into_inner().auth,
-                            None => return Err(ParseError::new(
-                                tm.span(),
-                                "authority must be provided to initialize a token program derived address"
-                            )),
-                        },
+                        mint: at.mint.clone(),
+                        owner: at.wallet.clone()
                     }
                 } else if let Some(d) = &mint_decimals {
                     InitKind::Mint {
@@ -523,7 +568,8 @@ impl<'ty> ConstraintGroupBuilder<'ty> {
                                 d.span(),
                                 "authority must be provided to initialize a mint program derived address"
                             ))
-                        }
+                        },
+                        freeze_authority: mint_freeze_authority.map(|fa| fa.into_inner().mint_freeze_auth)
                     }
                 } else {
                     InitKind::Program {
@@ -543,6 +589,7 @@ impl<'ty> ConstraintGroupBuilder<'ty> {
             state: into_inner!(state),
             close: into_inner!(close),
             address: into_inner!(address),
+            associated_token: if !is_init { associated_token } else { None },
             seeds,
         })
     }
@@ -570,6 +617,7 @@ impl<'ty> ConstraintGroupBuilder<'ty> {
             ConstraintToken::AssociatedTokenAuthority(c) => self.add_associated_token_authority(c),
             ConstraintToken::AssociatedTokenMint(c) => self.add_associated_token_mint(c),
             ConstraintToken::MintAuthority(c) => self.add_mint_authority(c),
+            ConstraintToken::MintFreezeAuthority(c) => self.add_mint_freeze_authority(c),
             ConstraintToken::MintDecimals(c) => self.add_mint_decimals(c),
             ConstraintToken::Bump(c) => self.add_bump(c),
         }
@@ -601,6 +649,7 @@ impl<'ty> ConstraintGroupBuilder<'ty> {
         if !matches!(self.f_ty, Some(Ty::ProgramAccount(_)))
             && !matches!(self.f_ty, Some(Ty::Account(_)))
             && !matches!(self.f_ty, Some(Ty::Loader(_)))
+            && !matches!(self.f_ty, Some(Ty::AccountLoader(_)))
         {
             return Err(ParseError::new(
                 c.span(),
@@ -658,12 +707,6 @@ impl<'ty> ConstraintGroupBuilder<'ty> {
         if self.token_mint.is_some() {
             return Err(ParseError::new(c.span(), "token mint already provided"));
         }
-        if self.init.is_none() {
-            return Err(ParseError::new(
-                c.span(),
-                "init must be provided before token",
-            ));
-        }
         self.associated_token_mint.replace(c);
         Ok(())
     }
@@ -715,12 +758,6 @@ impl<'ty> ConstraintGroupBuilder<'ty> {
                 "token authority already provided",
             ));
         }
-        if self.init.is_none() {
-            return Err(ParseError::new(
-                c.span(),
-                "init must be provided before token authority",
-            ));
-        }
         self.associated_token_authority.replace(c);
         Ok(())
     }
@@ -736,6 +773,26 @@ impl<'ty> ConstraintGroupBuilder<'ty> {
             ));
         }
         self.mint_authority.replace(c);
+        Ok(())
+    }
+
+    fn add_mint_freeze_authority(
+        &mut self,
+        c: Context<ConstraintMintFreezeAuthority>,
+    ) -> ParseResult<()> {
+        if self.mint_freeze_authority.is_some() {
+            return Err(ParseError::new(
+                c.span(),
+                "mint freeze_authority already provided",
+            ));
+        }
+        if self.init.is_none() {
+            return Err(ParseError::new(
+                c.span(),
+                "init must be provided before mint freeze_authority",
+            ));
+        }
+        self.mint_freeze_authority.replace(c);
         Ok(())
     }
 

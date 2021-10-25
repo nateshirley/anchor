@@ -5,7 +5,7 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { Address } from "./common";
-import { IdlInstruction } from "../idl";
+import { IdlAccountItem, IdlAccounts, IdlInstruction } from "../idl";
 
 /**
  * Context provides all non-argument inputs for generating Anchor transactions.
@@ -55,9 +55,13 @@ export type Context<A extends Accounts = Accounts> = {
  * If multiple accounts are nested in the rust program, then they should be
  * nested here.
  */
-export type Accounts = {
-  [key: string]: Address | Accounts;
+export type Accounts<A extends IdlAccountItem = IdlAccountItem> = {
+  [N in A["name"]]: Account<A & { name: N }>;
 };
+
+type Account<A extends IdlAccountItem> = A extends IdlAccounts
+  ? Accounts<A["accounts"][number]>
+  : Address;
 
 export function splitArgsAndCtx(
   idlIx: IdlInstruction,
@@ -68,7 +72,11 @@ export function splitArgsAndCtx(
   const inputLen = idlIx.args ? idlIx.args.length : 0;
   if (args.length > inputLen) {
     if (args.length !== inputLen + 1) {
-      throw new Error("provided too many arguments ${args}");
+      throw new Error(
+        `provided too many arguments ${args} to instruction ${
+          idlIx?.name
+        } expecting: ${idlIx.args?.map((a) => a.name) ?? []}`
+      );
     }
     options = args.pop();
   }

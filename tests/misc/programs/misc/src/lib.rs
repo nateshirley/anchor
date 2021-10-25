@@ -164,4 +164,29 @@ pub mod misc {
         assert!(ctx.accounts.token.mint == ctx.accounts.mint.key());
         Ok(())
     }
+
+    pub fn test_validate_associated_token(
+        _ctx: Context<TestValidateAssociatedToken>,
+    ) -> ProgramResult {
+        Ok(())
+    }
+
+    pub fn test_fetch_all(ctx: Context<TestFetchAll>, filterable: Pubkey) -> ProgramResult {
+        ctx.accounts.data.authority = ctx.accounts.authority.key();
+        ctx.accounts.data.filterable = filterable;
+        Ok(())
+    }
+
+    pub fn test_init_with_empty_seeds(ctx: Context<TestInitWithEmptySeeds>) -> ProgramResult {
+        Ok(())
+    }
+
+    pub fn test_empty_seeds_constraint(ctx: Context<TestEmptySeedsConstraint>) -> ProgramResult {
+        Ok(())
+    }
+
+    pub fn test_init_if_needed(ctx: Context<TestInitIfNeeded>, data: u16) -> ProgramResult {
+        ctx.accounts.data.data = data;
+        Ok(())
+    }
 }

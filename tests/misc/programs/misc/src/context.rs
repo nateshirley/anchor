@@ -50,6 +50,17 @@ pub struct TestInitAssociatedToken<'info> {
 }
 
 #[derive(Accounts)]
+pub struct TestValidateAssociatedToken<'info> {
+    #[account(
+        associated_token::mint = mint,
+        associated_token::authority = wallet,
+    )]
+    pub token: Account<'info, TokenAccount>,
+    pub mint: Account<'info, Mint>,
+    pub wallet: AccountInfo<'info>,
+}
+
+#[derive(Accounts)]
 #[instruction(nonce: u8)]
 pub struct TestInstructionConstraint<'info> {
     #[account(
@@ -183,7 +194,7 @@ pub struct TestInitZeroCopy<'info> {
 
 #[derive(Accounts)]
 pub struct TestInitMint<'info> {
-    #[account(init, mint::decimals = 6, mint::authority = payer, payer = payer)]
+    #[account(init, mint::decimals = 6, mint::authority = payer, mint::freeze_authority = payer, payer = payer)]
     pub mint: Account<'info, Mint>,
     #[account(signer)]
     pub payer: AccountInfo<'info>,
@@ -209,5 +220,35 @@ pub struct TestCompositePayer<'info> {
     pub composite: TestInit<'info>,
     #[account(init, payer = composite.payer, space = 8 + size_of::<Data>())]
     pub data: Account<'info, Data>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct TestFetchAll<'info> {
+    #[account(init, payer = authority)]
+    pub data: Account<'info, DataWithFilter>,
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct TestInitWithEmptySeeds<'info> {
+    #[account(init, seeds = [], bump, payer = authority, space = 8 + size_of::<Data>())]
+    pub pda: Account<'info, Data>,
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct TestEmptySeedsConstraint<'info> {
+    #[account(seeds = [], bump)]
+    pub pda: AccountInfo<'info>,
+}
+
+#[derive(Accounts)]
+pub struct TestInitIfNeeded<'info> {
+    #[account(init_if_needed, payer = payer)]
+    pub data: Account<'info, DataU16>,
+    pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
 }

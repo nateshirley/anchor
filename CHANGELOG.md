@@ -11,10 +11,46 @@ incremented for features.
 
 ## [Unreleased]
 
+## [0.18.0] - 2021-10-24
+
+### Features
+
+* cli: Add support for configuration options for `solana-test-validator` in Anchor.toml ([#834](https://github.com/project-serum/anchor/pull/834)).
+* cli: `target/types` directory now created on build to store a TypeScript types file for each program's IDL ([#795](https://github.com/project-serum/anchor/pull/795)).
+* ts: `Program<T>` can now be typed with an IDL type ([#795](https://github.com/project-serum/anchor/pull/795)).
+* lang: Add `mint::freeze_authority` keyword for mint initialization within `#[derive(Accounts)]` ([#835](https://github.com/project-serum/anchor/pull/835)).
+* lang: Add `AccountLoader` type for `zero_copy` accounts with support for CPI ([#792](https://github.com/project-serum/anchor/pull/792)).
+* lang: Add `#[account(init_if_needed)]` keyword for allowing one to invoke the same instruction even if the account was created already ([#906](https://github.com/project-serum/anchor/pull/906)).
+* lang: Add custom errors support for raw constraints ([#905](https://github.com/project-serum/anchor/pull/905)).
+* lang, cli, spl: Update solana toolchain to v1.8.0 ([#886](https://github.com/project-serum/anchor/pull/886)).
+* lang: Add custom errors support for `signer`, `mut`, `has_one`, `owner`, raw constraints and `address` ([#905](https://github.com/project-serum/anchor/pull/905), [#913](https://github.com/project-serum/anchor/pull/913)).
+
+### Breaking
+
+* lang: Accounts marked with the `#[account(signer)]` constraint now enforce signer when the `"cpi"` feature is enabled ([#849](https://github.com/project-serum/anchor/pull/849)).
+
+## [0.17.0] - 2021-10-03
+
+### Features
+
+* cli: Add `localnet` command for starting a local `solana-test-validator` with the workspace deployed ([#820](https://github.com/project-serum/anchor/pull/820)).
+
+### Breaking
+
+* `CpiContext` accounts must now be used with the accounts struct generated in the `crate::cpi::accounts::*` module. These structs correspond to the accounts context for each instruction, except that each field is of type `AccountInfo` ([#824](https://github.com/project-serum/anchor/pull/824)).
+
+## [0.16.2] - 2021-09-27
+
 ### Features
 
 * lang: Add `--detach` flag to `anchor test` ([#770](https://github.com/project-serum/anchor/pull/770)).
 * lang: Add `associated_token` keyword for initializing associated token accounts within `#[derive(Accounts)]` ([#790](https://github.com/project-serum/anchor/pull/790)).
+* cli: Allow passing through cargo flags for build command ([#719](https://github.com/project-serum/anchor/pull/719)).
+* cli: Allow passing through cargo flags for test, verify, and publish commands ([#804](https://github.com/project-serum/anchor/pull/804)).
+
+### Fixes
+
+* lang: Generated `AccountMeta`s for Rust clients now properly set the `isSigner` field ([#762](https://github.com/project-serum/anchor/pull/762)).
 
 ## [0.16.1] - 2021-09-17
 

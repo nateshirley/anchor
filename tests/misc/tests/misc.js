@@ -6,6 +6,7 @@ const {
   TOKEN_PROGRAM_ID,
   Token,
 } = require("@solana/spl-token");
+const miscIdl = require("../target/idl/misc.json");
 
 describe("misc", () => {
   // Configure the client to use the local cluster.
@@ -454,6 +455,9 @@ describe("misc", () => {
     assert.ok(
       mintAccount.mintAuthority.equals(program.provider.wallet.publicKey)
     );
+    assert.ok(
+      mintAccount.freezeAuthority.equals(program.provider.wallet.publicKey)
+    );
   });
 
   it("Can create a random mint account prefunded", async () => {
@@ -608,8 +612,10 @@ describe("misc", () => {
     assert.equal(account2.idata, 3);
   });
 
+  let associatedToken = null;
+
   it("Can create an associated token account", async () => {
-    const token = await Token.getAssociatedTokenAddress(
+    associatedToken = await Token.getAssociatedTokenAddress(
       ASSOCIATED_TOKEN_PROGRAM_ID,
       TOKEN_PROGRAM_ID,
       mint.publicKey,
@@ -618,7 +624,7 @@ describe("misc", () => {
 
     await program.rpc.testInitAssociatedToken({
       accounts: {
-        token,
+        token: associatedToken,
         mint: mint.publicKey,
         payer: program.provider.wallet.publicKey,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
@@ -633,11 +639,200 @@ describe("misc", () => {
       TOKEN_PROGRAM_ID,
       program.provider.wallet.payer
     );
-    const account = await client.getAccountInfo(token);
+    const account = await client.getAccountInfo(associatedToken);
     assert.ok(account.state === 1);
     assert.ok(account.amount.toNumber() === 0);
     assert.ok(account.isInitialized);
     assert.ok(account.owner.equals(program.provider.wallet.publicKey));
     assert.ok(account.mint.equals(mint.publicKey));
+  });
+
+  it("Can validate associated_token constraints", async () => {
+    await program.rpc.testValidateAssociatedToken({
+      accounts: {
+        token: associatedToken,
+        mint: mint.publicKey,
+        wallet: program.provider.wallet.publicKey,
+      },
+    });
+
+    await assert.rejects(
+      async () => {
+        await program.rpc.testValidateAssociatedToken({
+          accounts: {
+            token: associatedToken,
+            mint: mint.publicKey,
+            wallet: anchor.web3.Keypair.generate().publicKey,
+          },
+        });
+      },
+      (err) => {
+        assert.equal(err.code, 149);
+        return true;
+      }
+    );
+  });
+
+  it("Can fetch all accounts of a given type", async () => {
+    // Initialize the accounts.
+    const data1 = anchor.web3.Keypair.generate();
+    const data2 = anchor.web3.Keypair.generate();
+    const data3 = anchor.web3.Keypair.generate();
+    const data4 = anchor.web3.Keypair.generate();
+    // Initialize filterable data.
+    const filterable1 = anchor.web3.Keypair.generate().publicKey;
+    const filterable2 = anchor.web3.Keypair.generate().publicKey;
+    // Set up a secondary wallet and program.
+    const anotherProgram = new anchor.Program(
+      miscIdl,
+      program.programId,
+      new anchor.Provider(
+        program.provider.connection,
+        new anchor.Wallet(anchor.web3.Keypair.generate()),
+        { commitment: program.provider.connection.commitment }
+      )
+    );
+    // Request airdrop for secondary wallet.
+    const signature = await program.provider.connection.requestAirdrop(
+      anotherProgram.provider.wallet.publicKey,
+      anchor.web3.LAMPORTS_PER_SOL
+    );
+    await program.provider.connection.confirmTransaction(signature);
+    // Create all the accounts.
+    await Promise.all([
+      program.rpc.testFetchAll(filterable1, {
+        accounts: {
+          data: data1.publicKey,
+          authority: program.provider.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        },
+        signers: [data1],
+      }),
+      program.rpc.testFetchAll(filterable1, {
+        accounts: {
+          data: data2.publicKey,
+          authority: program.provider.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        },
+        signers: [data2],
+      }),
+      program.rpc.testFetchAll(filterable2, {
+        accounts: {
+          data: data3.publicKey,
+          authority: program.provider.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        },
+        signers: [data3],
+      }),
+      anotherProgram.rpc.testFetchAll(filterable1, {
+        accounts: {
+          data: data4.publicKey,
+          authority: anotherProgram.provider.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        },
+        signers: [data4],
+      }),
+    ]);
+    // Call for multiple kinds of .all.
+    const allAccounts = await program.account.dataWithFilter.all();
+    const allAccountsFilteredByBuffer = await program.account.dataWithFilter.all(
+      program.provider.wallet.publicKey.toBuffer()
+    );
+    const allAccountsFilteredByProgramFilters1 = await program.account.dataWithFilter.all(
+      [
+        {
+          memcmp: {
+            offset: 8,
+            bytes: program.provider.wallet.publicKey.toBase58(),
+          },
+        },
+        { memcmp: { offset: 40, bytes: filterable1.toBase58() } },
+      ]
+    );
+    const allAccountsFilteredByProgramFilters2 = await program.account.dataWithFilter.all(
+      [
+        {
+          memcmp: {
+            offset: 8,
+            bytes: program.provider.wallet.publicKey.toBase58(),
+          },
+        },
+        { memcmp: { offset: 40, bytes: filterable2.toBase58() } },
+      ]
+    );
+    // Without filters there should be 4 accounts.
+    assert.equal(allAccounts.length, 4);
+    // Filtering by main wallet there should be 3 accounts.
+    assert.equal(allAccountsFilteredByBuffer.length, 3);
+    // Filtering all the main wallet accounts and matching the filterable1 value
+    // results in a 2 accounts.
+    assert.equal(allAccountsFilteredByProgramFilters1.length, 2);
+    // Filtering all the main wallet accounts and matching the filterable2 value
+    // results in 1 account.
+    assert.equal(allAccountsFilteredByProgramFilters2.length, 1);
+  });
+
+  it("Can use pdas with empty seeds", async () => {
+    const [pda, bump] = await PublicKey.findProgramAddress(
+      [],
+      program.programId
+    );
+
+    await program.rpc.testInitWithEmptySeeds({
+      accounts: {
+        pda: pda,
+        authority: program.provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+    });
+    await program.rpc.testEmptySeedsConstraint({
+      accounts: {
+        pda: pda,
+      },
+    });
+
+    const [pda2, bump2] = await PublicKey.findProgramAddress(
+      ["non-empty"],
+      program.programId
+    );
+    await assert.rejects(
+      program.rpc.testEmptySeedsConstraint({
+        accounts: {
+          pda: pda2,
+        },
+      }),
+      (err) => {
+        assert.equal(err.code, 146);
+        return true;
+      }
+    );
+  });
+
+  const ifNeededAcc = anchor.web3.Keypair.generate();
+
+  it("Can init if needed a new account", async () => {
+    await program.rpc.testInitIfNeeded(1, {
+      accounts: {
+        data: ifNeededAcc.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        payer: program.provider.wallet.publicKey,
+      },
+      signers: [ifNeededAcc],
+    });
+    const account = await program.account.dataU16.fetch(ifNeededAcc.publicKey);
+    assert.ok(account.data, 1);
+  });
+
+  it("Can init if needed a previously created account", async () => {
+    await program.rpc.testInitIfNeeded(3, {
+      accounts: {
+        data: ifNeededAcc.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        payer: program.provider.wallet.publicKey,
+      },
+      signers: [ifNeededAcc],
+    });
+    const account = await program.account.dataU16.fetch(ifNeededAcc.publicKey);
+    assert.ok(account.data, 3);
   });
 });
