@@ -113,7 +113,7 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
-pub struct TestOwner<'info> {
+pub struct Test'info> {
     #[account(owner = *misc.key)]
     pub data: AccountInfo<'info>,
     pub misc: AccountInfo<'info>,

@@ -14,8 +14,11 @@ pub struct Program<'info, T: Id + AccountDeserialize + Clone> {
 }
 
 impl<'a, T: Id + AccountDeserialize + Clone> Program<'a, T> {
-    fn new(info: AccountInfo<'a>, account: T) -> Program<'a, T> {
-        Self { info, account }
+    fn new(i: AccountInfo<'a>, a: T) -> Program<'a, T> {
+        Self {
+            account: a,
+            info: i
+        }
     }
 
     /// Deserializes the given `info` into a `Program`.

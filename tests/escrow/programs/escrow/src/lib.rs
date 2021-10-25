@@ -66,7 +66,6 @@ pub mod escrow {
             AuthorityType::AccountOwner,
             Some(ctx.accounts.escrow_account.initializer_key),
         )?;
-
         Ok(())
     }
 

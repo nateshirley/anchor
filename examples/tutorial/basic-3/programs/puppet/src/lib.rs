@@ -8,7 +8,6 @@ pub mod puppet {
     pub fn initialize(_ctx: Context<Initialize>) -> ProgramResult {
         Ok(())
     }
-
     pub fn set_data(ctx: Context<SetData>, data: u64) -> ProgramResult {
         let puppet = &mut ctx.accounts.puppet;
         puppet.data = data;
