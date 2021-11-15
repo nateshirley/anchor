@@ -56,7 +56,7 @@ checksum = "6b2d54853319fd101b8dd81de382bcbf3e03410a64d8928bbee85a3e7dcde483"
 
 [[package]]
 name = "anchor-attribute-access-control"
-version = "0.18.0"
+version = "0.18.2"
 dependencies = [
  "anchor-syn",
  "anyhow",
@@ -68,7 +68,7 @@ dependencies = [
 
 [[package]]
 name = "anchor-attribute-account"
-version = "0.18.0"
+version = "0.18.2"
 dependencies = [
  "anchor-syn",
  "anyhow",
@@ -81,7 +81,7 @@ dependencies = [
 
 [[package]]
 name = "anchor-attribute-error"
-version = "0.18.0"
+version = "0.18.2"
 dependencies = [
  "anchor-syn",
  "proc-macro2 1.0.29",
@@ -91,7 +91,7 @@ dependencies = [
 
 [[package]]
 name = "anchor-attribute-event"
-version = "0.18.0"
+version = "0.18.2"
 dependencies = [
  "anchor-syn",
  "anyhow",
@@ -102,7 +102,7 @@ dependencies = [
 
 [[package]]
 name = "anchor-attribute-interface"
-version = "0.18.0"
+version = "0.18.2"
 dependencies = [
  "anchor-syn",
  "anyhow",
@@ -114,7 +114,7 @@ dependencies = [
 
 [[package]]
 name = "anchor-attribute-program"
-version = "0.18.0"
+version = "0.18.2"
 dependencies = [
  "anchor-syn",
  "anyhow",
@@ -125,7 +125,7 @@ dependencies = [
 
 [[package]]
 name = "anchor-attribute-state"
-version = "0.18.0"
+version = "0.18.2"
 dependencies = [
  "anchor-syn",
  "anyhow",
@@ -136,7 +136,7 @@ dependencies = [
 
 [[package]]
 name = "anchor-cli"
-version = "0.18.0"
+version = "0.18.2"
 dependencies = [
  "anchor-client",
  "anchor-lang",
@@ -150,6 +150,7 @@ dependencies = [
  "pathdiff",
  "rand 0.7.3",
  "reqwest",
+ "semver 1.0.4",
  "serde",
  "serde_json",
  "serum-common",
@@ -166,7 +167,7 @@ dependencies = [
 
 [[package]]
 name = "anchor-client"
-version = "0.18.0"
+version = "0.18.2"
 dependencies = [
  "anchor-lang",
  "anyhow",
@@ -180,7 +181,7 @@ dependencies = [
 
 [[package]]
 name = "anchor-derive-accounts"
-version = "0.18.0"
+version = "0.18.2"
 dependencies = [
  "anchor-syn",
  "anyhow",
@@ -191,7 +192,7 @@ dependencies = [
 
 [[package]]
 name = "anchor-lang"
-version = "0.18.0"
+version = "0.18.2"
 dependencies = [
  "anchor-attribute-access-control",
  "anchor-attribute-account",
@@ -210,10 +211,9 @@ dependencies = [
 
 [[package]]
 name = "anchor-spl"
-version = "0.18.0"
+version = "0.18.2"
 dependencies = [
  "anchor-lang",
- "lazy_static",
  "serum_dex",
  "solana-program",
  "spl-associated-token-account",
@@ -222,7 +222,7 @@ dependencies = [
 
 [[package]]
 name = "anchor-syn"
-version = "0.18.0"
+version = "0.18.2"
 dependencies = [
  "anyhow",
  "bs58 0.3.1",
@@ -2634,6 +2634,12 @@ checksum = "f301af10236f6df4160f7c3f04eec6dbc70ace82d23326abad5edee88801c6b6"
 dependencies = [
  "semver-parser 0.10.2",
 ]
+
+[[package]]
+name = "semver"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "568a8e6258aa33c13358f81fd834adb854c6f7c9468520910a9b1e8fac068012"
 
 [[package]]
 name = "semver-parser"

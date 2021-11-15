@@ -16,6 +16,7 @@ use heck::SnakeCase;
 use rand::rngs::OsRng;
 use reqwest::blocking::multipart::{Form, Part};
 use reqwest::blocking::Client;
+use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_config::RpcSendTransactionConfig;
@@ -66,6 +67,9 @@ pub enum Command {
         /// Output directory for the IDL.
         #[clap(short, long)]
         idl: Option<String>,
+        /// Output directory for the TypeScript IDL.
+        #[clap(short = 't', long)]
+        idl_ts: Option<String>,
         /// True if the build artifact needs to be deterministic and verifiable.
         #[clap(short, long)]
         verifiable: bool,
@@ -284,9 +288,12 @@ pub enum IdlCommand {
         /// Path to the program's interface definition.
         #[clap(short, long)]
         file: String,
-        /// Output file for the idl (stdout if not specified).
+        /// Output file for the IDL (stdout if not specified).
         #[clap(short, long)]
         out: Option<String>,
+        /// Output file for the TypeScript IDL.
+        #[clap(short = 't', long)]
+        out_ts: Option<String>,
     },
     /// Fetches an IDL for the given address from a cluster.
     /// The address can be a program, IDL account, or IDL buffer.
@@ -310,6 +317,7 @@ pub fn entry(opts: Opts) -> Result<()> {
         Command::New { name } => new(&opts.cfg_override, name),
         Command::Build {
             idl,
+            idl_ts,
             verifiable,
             program_name,
             solana_version,
@@ -317,6 +325,7 @@ pub fn entry(opts: Opts) -> Result<()> {
         } => build(
             &opts.cfg_override,
             idl,
+            idl_ts,
             verifiable,
             program_name,
             solana_version,
@@ -391,9 +400,9 @@ fn init(cfg_override: &ConfigOverride, name: String, javascript: bool) -> Result
     cfg.scripts.insert(
         "test".to_owned(),
         if javascript {
-            "mocha -t 1000000 tests/"
+            "yarn run mocha -t 1000000 tests/"
         } else {
-            "ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+            "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
         }
         .to_owned(),
     );
@@ -509,6 +518,7 @@ fn new_program(name: &str) -> Result<()> {
 pub fn build(
     cfg_override: &ConfigOverride,
     idl: Option<String>,
+    idl_ts: Option<String>,
     verifiable: bool,
     program_name: Option<String>,
     solana_version: Option<String>,
@@ -526,14 +536,17 @@ pub fn build(
 
     let cargo = Manifest::discover()?;
 
-    fs::create_dir_all(cfg_parent.join("target/idl"))?;
-    fs::create_dir_all(cfg_parent.join("target/types"))?;
-
     let idl_out = match idl {
         Some(idl) => Some(PathBuf::from(idl)),
         None => Some(cfg_parent.join("target/idl")),
     };
-    let idl_ts_out = Some(cfg_parent.join("target/types"));
+    fs::create_dir_all(idl_out.as_ref().unwrap())?;
+
+    let idl_ts_out = match idl_ts {
+        Some(idl_ts) => Some(PathBuf::from(idl_ts)),
+        None => Some(cfg_parent.join("target/types")),
+    };
+    fs::create_dir_all(idl_ts_out.as_ref().unwrap())?;
 
     let solana_version = match solana_version.is_some() {
         true => solana_version,
@@ -892,7 +905,7 @@ fn _build_cwd(
         std::process::exit(exit.status.code().unwrap_or(1));
     }
 
-    // Always assume idl is located ar src/lib.rs.
+    // Always assume idl is located at src/lib.rs.
     if let Some(idl) = extract_idl("src/lib.rs")? {
         // JSON out path.
         let out = match idl_out {
@@ -935,6 +948,7 @@ fn verify(
     let cur_dir = std::env::current_dir()?;
     build(
         cfg_override,
+        None,
         None,
         true,
         None,
@@ -1138,7 +1152,7 @@ fn idl(cfg_override: &ConfigOverride, subcmd: IdlCommand) -> Result<()> {
         } => idl_set_authority(cfg_override, program_id, address, new_authority),
         IdlCommand::EraseAuthority { program_id } => idl_erase_authority(cfg_override, program_id),
         IdlCommand::Authority { program_id } => idl_authority(cfg_override, program_id),
-        IdlCommand::Parse { file, out } => idl_parse(file, out),
+        IdlCommand::Parse { file, out, out_ts } => idl_parse(file, out, out_ts),
         IdlCommand::Fetch { address, out } => idl_fetch(cfg_override, address, out),
     }
 }
@@ -1397,13 +1411,20 @@ fn idl_write(cfg: &Config, program_id: &Pubkey, idl: &Idl, idl_address: Pubkey) 
     Ok(())
 }
 
-fn idl_parse(file: String, out: Option<String>) -> Result<()> {
+fn idl_parse(file: String, out: Option<String>, out_ts: Option<String>) -> Result<()> {
     let idl = extract_idl(&file)?.ok_or_else(|| anyhow!("IDL not parsed"))?;
     let out = match out {
         None => OutFile::Stdout,
         Some(out) => OutFile::File(PathBuf::from(out)),
     };
-    write_idl(&idl, out)
+    write_idl(&idl, out)?;
+
+    // Write out the TypeScript IDL.
+    if let Some(out) = out_ts {
+        fs::write(out, template::idl_ts(&idl)?)?;
+    }
+
+    Ok(())
 }
 
 fn idl_fetch(cfg_override: &ConfigOverride, address: Pubkey, out: Option<String>) -> Result<()> {
@@ -1446,6 +1467,7 @@ fn test(
             build(
                 cfg_override,
                 None,
+                None,
                 false,
                 None,
                 None,
@@ -1478,13 +1500,14 @@ fn test(
         let url = cluster_url(cfg);
 
         let node_options = format!(
-            "{} --dns-result-order=ipv4first",
+            "{} {}",
             match std::env::var_os("NODE_OPTIONS") {
                 Some(value) => value
                     .into_string()
                     .map_err(std::env::VarError::NotUnicode)?,
                 None => "".to_owned(),
-            }
+            },
+            get_node_dns_option()?,
         );
 
         // Setup log reader.
@@ -2323,7 +2346,7 @@ fn publish(
                 // Only add the file if it's not empty.
                 let metadata = fs::File::open(&e)?.metadata()?;
                 if metadata.len() > 0 {
-                    println!("PACKING: {}", e.display().to_string());
+                    println!("PACKING: {}", e.display());
                     if e.is_dir() {
                         tar.append_dir_all(&e, &e)?;
                     } else {
@@ -2351,6 +2374,7 @@ fn publish(
     // Build the program before sending it to the server.
     build(
         cfg_override,
+        None,
         None,
         true,
         Some(program_name),
@@ -2429,7 +2453,7 @@ fn keys_list(cfg_override: &ConfigOverride) -> Result<()> {
     let cfg = Config::discover(cfg_override)?.expect("Not in workspace.");
     for program in cfg.read_all_programs()? {
         let pubkey = program.pubkey()?;
-        println!("{}: {}", program.lib_name, pubkey.to_string());
+        println!("{}: {}", program.lib_name, pubkey);
     }
     Ok(())
 }
@@ -2445,6 +2469,7 @@ fn localnet(
         if !skip_build {
             build(
                 cfg_override,
+                None,
                 None,
                 false,
                 None,
@@ -2513,4 +2538,27 @@ fn is_hidden(entry: &walkdir::DirEntry) -> bool {
         .to_str()
         .map(|s| s == "." || s.starts_with('.') || s == "target")
         .unwrap_or(false)
+}
+
+fn get_node_version() -> Result<Version> {
+    let node_version = std::process::Command::new("node")
+        .arg("--version")
+        .stderr(Stdio::inherit())
+        .output()
+        .map_err(|e| anyhow::format_err!("node failed: {}", e.to_string()))?;
+    let output = std::str::from_utf8(&node_version.stdout)?
+        .strip_prefix('v')
+        .unwrap()
+        .trim();
+    Version::parse(output).map_err(Into::into)
+}
+
+fn get_node_dns_option() -> Result<&'static str> {
+    let version = get_node_version()?;
+    let req = VersionReq::parse(">=16.4.0").unwrap();
+    let option = match req.matches(&version) {
+        true => "--dns-result-order=ipv4first",
+        false => "",
+    };
+    Ok(option)
 }
